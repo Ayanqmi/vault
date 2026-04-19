@@ -293,21 +293,16 @@ button.nav-link { background: none; border: none; cursor: pointer; font-family: 
 
 .hero-brand {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-.hero-logo-icon {
-  width: 72px;
-  height: 72px;
-  display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-3);
-  border: 1px solid var(--border-2);
-  border-radius: 18px;
-  color: var(--text-muted);
+  gap: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+.hero-logo {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  border-radius: 10px;
 }
 .hero-wordmark {
   font-size: clamp(1.9rem, 5vw, 3rem);
