@@ -230,6 +230,16 @@ function buildWidgetEl(w) {
 // ─── Drag to reorder ──────────────────────────────────────────────────────────
 let dragSrcId = null;
 
+// Determine insert-before vs insert-after using diagonal split:
+// upper-left triangle of the target element = before, lower-right = after.
+// This works naturally for both horizontal (column-to-column) and vertical
+// (within-column) drags without needing to know the column layout.
+function dropBefore(e, rect) {
+  const nx = (e.clientX - rect.left)  / rect.width;   // 0–1 across element
+  const ny = (e.clientY - rect.top)   / rect.height;  // 0–1 down element
+  return nx + ny < 1;
+}
+
 function enableDrag(el, widgetId) {
   const handle = el.querySelector('.widget-drag-handle');
 
@@ -250,9 +260,8 @@ function enableDrag(el, widgetId) {
     e.preventDefault();
     if (!dragSrcId || dragSrcId === widgetId) return;
     e.dataTransfer.dropEffect = 'move';
-    // Determine insert position: before or after based on mouse Y
-    const rect = el.getBoundingClientRect();
-    const before = e.clientY < rect.top + rect.height / 2;
+    const rect   = el.getBoundingClientRect();
+    const before = dropBefore(e, rect);
     document.querySelectorAll('.widget--drop-before, .widget--drop-after')
       .forEach(w => w.classList.remove('widget--drop-before', 'widget--drop-after'));
     el.classList.add(before ? 'widget--drop-before' : 'widget--drop-after');
@@ -270,7 +279,7 @@ function enableDrag(el, widgetId) {
     if (!dragSrcId || dragSrcId === widgetId) return;
 
     const rect   = el.getBoundingClientRect();
-    const before = e.clientY < rect.top + rect.height / 2;
+    const before = dropBefore(e, rect);
 
     const srcIdx = allWidgets.findIndex(w => w.id === dragSrcId);
     let   dstIdx = allWidgets.findIndex(w => w.id === widgetId);
