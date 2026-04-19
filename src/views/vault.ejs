@@ -1,0 +1,134 @@
+<%- include('partials/head', { title: 'Vault' }) %>
+<%- include('partials/topbar') %>
+
+<main class="vault-page">
+  <!-- Sidebar -->
+  <aside class="vault-sidebar" id="vaultSidebar">
+    <div class="sidebar-section">
+      <span class="sidebar-label">filter by type</span>
+      <button class="filter-btn filter-btn--active" data-filter="all">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        all
+      </button>
+      <button class="filter-btn" data-filter="note">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        notes
+      </button>
+      <button class="filter-btn" data-filter="reminder">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        reminders
+      </button>
+      <button class="filter-btn" data-filter="bookmark">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        bookmarks
+      </button>
+      <button class="filter-btn" data-filter="account">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        accounts
+      </button>
+      <button class="filter-btn" data-filter="birthday">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        birthdays
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <span class="sidebar-label">search</span>
+      <input class="sidebar-search" type="search" id="widgetSearch" placeholder="search vault…" />
+    </div>
+  </aside>
+
+  <!-- Main area -->
+  <div class="vault-main">
+    <div class="vault-toolbar">
+      <h2 class="vault-heading">
+        <span id="filterLabel">all items</span>
+        <span class="vault-count" id="widgetCount"></span>
+      </h2>
+      <button class="btn btn--primary btn--sm" id="addWidgetBtn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        add
+      </button>
+    </div>
+
+    <div class="widget-grid" id="widgetGrid">
+      <div class="widget-loading" id="widgetLoading">
+        <div class="spinner"></div>
+        <span>decrypting vault…</span>
+      </div>
+    </div>
+
+    <div class="vault-empty" id="vaultEmpty" style="display:none">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <p>your vault is empty</p>
+      <button class="btn btn--ghost btn--sm" id="addWidgetBtnEmpty">add your first item</button>
+    </div>
+  </div>
+</main>
+
+<!-- ─── Add / Edit Widget Modal ─────────────────────────────────────────────── -->
+<div class="modal-overlay" id="widgetModal" style="display:none" role="dialog" aria-modal="true" aria-label="Widget editor">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modalTitle">add item</h3>
+      <button class="modal-close" id="modalClose" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Type picker (only shown on add) -->
+    <div id="typePicker" class="type-picker">
+      <button class="type-btn" data-type="note">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        note
+      </button>
+      <button class="type-btn" data-type="reminder">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        reminder
+      </button>
+      <button class="type-btn" data-type="bookmark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        bookmark
+      </button>
+      <button class="type-btn" data-type="account">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        account
+      </button>
+      <button class="type-btn" data-type="birthday">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        birthday
+      </button>
+    </div>
+
+    <!-- Dynamic form fields inserted by vault.js -->
+    <div id="widgetForm" style="display:none">
+      <div class="modal-fields" id="modalFields"></div>
+      <div id="modalError" class="form-msg form-msg--error" style="display:none"></div>
+      <div class="modal-actions">
+        <button class="btn btn--ghost btn--sm" id="modalCancel">cancel</button>
+        <button class="btn btn--primary btn--sm" id="modalSave">save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Delete confirm ────────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="deleteModal" style="display:none" role="dialog" aria-modal="true">
+  <div class="modal modal--sm">
+    <div class="modal-header">
+      <h3 class="modal-title">delete item?</h3>
+      <button class="modal-close" id="deleteModalClose" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <p class="modal-body-text">This cannot be undone.</p>
+    <div class="modal-actions">
+      <button class="btn btn--ghost btn--sm" id="deleteCancelBtn">cancel</button>
+      <button class="btn btn--danger btn--sm" id="deleteConfirmBtn">delete</button>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>
+<script src="/crypto.js"></script>
+<script src="/vault.js"></script>

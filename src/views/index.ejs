@@ -1,0 +1,67 @@
+<%- include('partials/head', { title: null }) %>
+<%- include('partials/topbar') %>
+
+<canvas id="starfield" class="starfield"></canvas>
+
+<main class="landing">
+  <section class="hero">
+    <div class="hero-brand" data-reveal>
+      <div class="hero-logo-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+    </div>
+    <h1 class="hero-title" data-reveal>
+      stop using your second<br/>Discord account for notes.
+    </h1>
+    <p class="hero-sub" data-reveal>
+      ayanami.vault — your personal encrypted space for notes, passwords,
+      bookmarks, reminders, and anything else that matters.
+    </p>
+    <div class="hero-ctas" data-reveal>
+      <a href="/auth/login" class="btn btn--accent">open your vault</a>
+      <a href="https://ayanami.app/auth/register" target="_blank" rel="noopener" class="btn btn--ghost">create account</a>
+    </div>
+  </section>
+
+  <section class="features" data-reveal>
+    <div class="feature-grid">
+      <div class="feature-card" data-reveal-stagger>
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>zero-knowledge encryption</h3>
+        <p>AES-256-GCM, PBKDF2 key derivation. Your vault key is derived in your browser and never sent to us.</p>
+      </div>
+      <div class="feature-card" data-reveal-stagger>
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        </div>
+        <h3>modular widgets</h3>
+        <p>Notes, reminders, bookmarks, account credentials, birthdays — add what you need, hide what you don't.</p>
+      </div>
+      <div class="feature-card" data-reveal-stagger>
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
+        <h3>open source</h3>
+        <p>Every line of code is public. Audit it, fork it, self-host it. Security through transparency.</p>
+      </div>
+      <div class="feature-card" data-reveal-stagger>
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        </div>
+        <h3>ayanami ecosystem</h3>
+        <p>Same account as ayanami.app. Familiar design, consistent experience across all ayanami tools.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="security-note" data-reveal>
+    <div class="security-inner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <p>When you create a vault, you set a <strong>vault key</strong> — a separate password used to encrypt your data locally. We store only the ciphertext. Lose your vault key and your data is unrecoverable. That's a feature.</p>
+    </div>
+  </section>
+</main>
+
+<%- include('partials/footer') %>

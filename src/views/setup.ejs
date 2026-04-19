@@ -1,0 +1,156 @@
+<%- include('partials/head', { title: 'Set up vault key' }) %>
+<%- include('partials/topbar') %>
+
+<canvas id="starfield" class="starfield"></canvas>
+
+<main class="auth-page">
+  <div class="auth-card auth-card--unlock">
+    <div class="unlock-icon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+    </div>
+
+    <h1 class="auth-title">set your vault key</h1>
+    <p class="unlock-sub">
+      This is your <strong>master encryption password</strong>. All your vault data is encrypted with a key derived from it using PBKDF2. <strong>We never see or store this password.</strong> If you lose it, your data cannot be recovered.
+    </p>
+
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div class="form-msg form-msg--error"><%= error %></div>
+    <% } %>
+
+    <form class="auth-form" id="setupForm">
+      <input type="hidden" id="setupCsrf" value="<%= csrfToken %>" />
+
+      <div class="field">
+        <label class="field-label" for="vaultKey">vault key</label>
+        <div class="field-wrap">
+          <input class="field-input" type="password" id="vaultKey" name="vaultKey"
+                 autocomplete="new-password" minlength="8" autofocus required />
+          <button type="button" class="field-eye" aria-label="Show vault key" data-eye="vaultKey">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <span class="field-hint">minimum 8 characters. use something strong and unique.</span>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="vaultKeyConfirm">confirm vault key</label>
+        <div class="field-wrap">
+          <input class="field-input" type="password" id="vaultKeyConfirm" name="vaultKeyConfirm"
+                 autocomplete="new-password" minlength="8" required />
+          <button type="button" class="field-eye" aria-label="Show vault key" data-eye="vaultKeyConfirm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="setupError" class="form-msg form-msg--error" style="display:none"></div>
+
+      <div class="strength-bar-wrap">
+        <div class="strength-bar" id="strengthBar"></div>
+      </div>
+      <span class="strength-label" id="strengthLabel"></span>
+
+      <button class="btn btn--primary btn--full" type="submit" id="setupBtn">
+        <span id="setupBtnText">create vault</span>
+      </button>
+    </form>
+
+    <div class="register-note">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Write your vault key down somewhere safe. There is no "forgot my vault key" — by design.
+    </div>
+  </div>
+</main>
+
+<%- include('partials/footer') %>
+<script src="/crypto.js"></script>
+<script>
+const form      = document.getElementById('setupForm');
+const setupBtn  = document.getElementById('setupBtn');
+const setupText = document.getElementById('setupBtnText');
+const errEl     = document.getElementById('setupError');
+const csrf      = document.getElementById('setupCsrf').value;
+const strengthBar   = document.getElementById('strengthBar');
+const strengthLabel = document.getElementById('strengthLabel');
+
+// Simple password strength indicator
+document.getElementById('vaultKey').addEventListener('input', function () {
+  const v = this.value;
+  let score = 0;
+  if (v.length >= 8)  score++;
+  if (v.length >= 12) score++;
+  if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+  if (/\d/.test(v)) score++;
+  if (/[^a-zA-Z0-9]/.test(v)) score++;
+
+  const labels = ['', 'weak', 'fair', 'good', 'strong', 'very strong'];
+  const colors = ['', '#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#27ae60'];
+  strengthBar.style.width  = (score / 5 * 100) + '%';
+  strengthBar.style.background = colors[score] || 'transparent';
+  strengthLabel.textContent = labels[score] || '';
+});
+
+if (form) {
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    errEl.style.display = 'none';
+
+    const vaultKey = document.getElementById('vaultKey').value;
+    const confirm  = document.getElementById('vaultKeyConfirm').value;
+
+    if (vaultKey.length < 8) {
+      errEl.textContent = 'Vault key must be at least 8 characters.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (vaultKey !== confirm) {
+      errEl.textContent = 'Vault keys do not match.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    setupBtn.disabled = true;
+    setupText.textContent = 'creating vault…';
+
+    try {
+      // Generate a random salt
+      const saltBytes = crypto.getRandomValues(new Uint8Array(32));
+      const salt = btoa(String.fromCharCode(...saltBytes));
+
+      // Derive the key
+      const key = await vault_deriveKey(vaultKey, salt);
+
+      // Encrypt the known sentinel
+      const { data, iv } = await vault_encrypt(key, 'ayanami.vault.ok');
+
+      // Send salt + encrypted test to server
+      const res = await fetch('/vault/setup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrf,
+        },
+        body: JSON.stringify({ vault_salt: salt, vault_test: data, vault_test_iv: iv }),
+      });
+
+      if (res.redirected) {
+        window.location.href = res.url;
+        return;
+      }
+
+      const result = await res.json().catch(() => ({}));
+      if (res.ok && result.ok) {
+        window.location.href = '/vault';
+      } else {
+        throw new Error(result.error || 'Setup failed.');
+      }
+    } catch (err) {
+      errEl.textContent = err.message || 'Something went wrong.';
+      errEl.style.display = 'block';
+      setupBtn.disabled = false;
+      setupText.textContent = 'create vault';
+    }
+  });
+}
+</script>

@@ -1,0 +1,106 @@
+<%- include('partials/head', { title: hasVault ? 'Unlock vault' : 'Set vault key' }) %>
+<%- include('partials/topbar') %>
+
+<canvas id="starfield" class="starfield"></canvas>
+
+<main class="auth-page">
+  <div class="auth-card auth-card--unlock">
+    <div class="unlock-icon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+
+    <h1 class="auth-title"><%= hasVault ? 'unlock your vault' : 'vault not set up' %></h1>
+
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div class="form-msg form-msg--error"><%= error %></div>
+    <% } %>
+
+    <% if (hasVault) { %>
+      <p class="unlock-sub">Enter your vault key to decrypt your data. This key never leaves your device.</p>
+
+      <!-- The form submits the decrypted sentinel, not the key itself -->
+      <form class="auth-form" id="unlockForm">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" id="vaultSalt"    value="<%= user.vault_salt %>" />
+        <input type="hidden" id="vaultTest"    value="<%= user.vault_test %>" />
+        <input type="hidden" id="vaultTestIv"  value="<%= user.vault_test_iv %>" />
+
+        <div class="field">
+          <label class="field-label" for="vaultKey">vault key</label>
+          <div class="field-wrap">
+            <input class="field-input" type="password" id="vaultKey" name="vaultKey"
+                   autocomplete="current-password" autofocus required />
+            <button type="button" class="field-eye" aria-label="Show vault key" data-eye="vaultKey">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="unlockError" class="form-msg form-msg--error" style="display:none"></div>
+
+        <button class="btn btn--primary btn--full" type="submit" id="unlockBtn">
+          <span id="unlockBtnText">unlock</span>
+        </button>
+      </form>
+    <% } else { %>
+      <p class="unlock-sub">You haven't set up a vault key yet. <a href="/vault/setup">Set up your vault key</a> to get started.</p>
+    <% } %>
+  </div>
+</main>
+
+<%- include('partials/footer') %>
+<script src="/crypto.js"></script>
+<script>
+// Unlock: derive key client-side, decrypt the sentinel, send result to server
+const form       = document.getElementById('unlockForm');
+const unlockBtn  = document.getElementById('unlockBtn');
+const unlockText = document.getElementById('unlockBtnText');
+const errEl      = document.getElementById('unlockError');
+const csrfToken  = document.querySelector('meta[name="csrf-token"]').content;
+
+if (form) {
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    errEl.style.display = 'none';
+    unlockBtn.disabled  = true;
+    unlockText.textContent = 'unlocking…';
+
+    const vaultKey  = document.getElementById('vaultKey').value;
+    const salt      = document.getElementById('vaultSalt').value;
+    const testEnc   = document.getElementById('vaultTest').value;
+    const testIv    = document.getElementById('vaultTestIv').value;
+
+    try {
+      const key       = await vault_deriveKey(vaultKey, salt);
+      const decrypted = await vault_decrypt(key, testEnc, testIv);
+
+      // Send the decrypted sentinel to the server for verification
+      const res = await fetch('/vault/unlock', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+        },
+        body: JSON.stringify({ sentinel: decrypted }),
+      });
+
+      if (res.redirected) {
+        window.location.href = res.url;
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        window.location.href = '/vault';
+      } else {
+        throw new Error(data.error || 'Incorrect vault key.');
+      }
+    } catch (err) {
+      errEl.textContent   = err.message || 'Incorrect vault key.';
+      errEl.style.display = 'block';
+      unlockBtn.disabled  = false;
+      unlockText.textContent = 'unlock';
+    }
+  });
+}
+</script>
