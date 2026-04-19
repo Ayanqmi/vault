@@ -49,23 +49,49 @@
         <span id="filterLabel">all items</span>
         <span class="vault-count" id="widgetCount"></span>
       </h2>
-      <button class="btn btn--primary btn--sm" id="addWidgetBtn">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        add
-      </button>
-    </div>
-
-    <div class="widget-grid" id="widgetGrid">
-      <div class="widget-loading" id="widgetLoading">
-        <div class="spinner"></div>
-        <span>decrypting vault…</span>
+      <div class="toolbar-right">
+        <div class="view-toggle">
+          <button class="view-btn view-btn--active" id="viewGridBtn" title="Grid view">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </button>
+          <button class="view-btn" id="viewCalBtn" title="Calendar view">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </button>
+        </div>
+        <button class="btn btn--primary btn--sm" id="addWidgetBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          add
+        </button>
       </div>
     </div>
 
-    <div class="vault-empty" id="vaultEmpty" style="display:none">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      <p>your vault is empty</p>
-      <button class="btn btn--ghost btn--sm" id="addWidgetBtnEmpty">add your first item</button>
+    <!-- Grid view -->
+    <div id="gridView">
+      <div class="widget-grid" id="widgetGrid">
+        <div class="widget-loading" id="widgetLoading">
+          <div class="spinner"></div>
+          <span>decrypting vault…</span>
+        </div>
+      </div>
+      <div class="vault-empty" id="vaultEmpty" style="display:none">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <p>your vault is empty</p>
+        <button class="btn btn--ghost btn--sm" id="addWidgetBtnEmpty">add your first item</button>
+      </div>
+    </div>
+
+    <!-- Calendar view -->
+    <div id="calendarView" style="display:none">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" id="calPrev">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span class="cal-nav-title" id="calTitle"></span>
+        <button class="cal-nav-btn" id="calNext">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
     </div>
   </div>
 </main>

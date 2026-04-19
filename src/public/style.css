@@ -691,11 +691,38 @@ button.nav-link { background: none; border: none; cursor: pointer; font-family: 
 }
 
 .vault-toolbar {
-  display: flex;
-  align-items: center;
+  display:         flex;
+  align-items:     center;
   justify-content: space-between;
-  margin-bottom: 1.4rem;
+  margin-bottom:   1.4rem;
 }
+
+.toolbar-right {
+  display:     flex;
+  align-items: center;
+  gap:         .5rem;
+}
+
+/* View toggle (grid / calendar) */
+.view-toggle {
+  display:       flex;
+  border:        1px solid var(--border-2);
+  border-radius: var(--radius);
+  overflow:      hidden;
+}
+.view-btn {
+  background:  transparent;
+  border:      none;
+  color:       var(--text-muted);
+  cursor:      pointer;
+  padding:     .3rem .5rem;
+  display:     flex;
+  align-items: center;
+  transition:  background .12s, color .12s;
+}
+.view-btn:hover           { color: var(--text); background: var(--bg-3); }
+.view-btn--active         { color: var(--text); background: var(--bg-3); }
+.view-btn + .view-btn     { border-left: 1px solid var(--border-2); }
 
 .vault-heading {
   font-size: 0.82rem;
@@ -1140,6 +1167,109 @@ button.nav-link { background: none; border: none; cursor: pointer; font-family: 
   flex: 1;
 }
 .tags-input-field::placeholder { color: var(--text-dim); }
+
+/* ─── Calendar ────────────────────────────────────────────────────────────── */
+.cal-nav {
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  gap:             1rem;
+  margin-bottom:   1.1rem;
+}
+.cal-nav-title {
+  font-weight:  600;
+  font-size:    .92rem;
+  min-width:    150px;
+  text-align:   center;
+}
+.cal-nav-btn {
+  background:  transparent;
+  border:      1px solid var(--border-2);
+  border-radius: var(--radius);
+  color:       var(--text-muted);
+  cursor:      pointer;
+  padding:     .3rem .45rem;
+  display:     flex;
+  align-items: center;
+  transition:  border-color .12s, color .12s;
+}
+.cal-nav-btn:hover { border-color: var(--border-3); color: var(--text); }
+
+.cal-grid {
+  display:               grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap:                   2px;
+}
+
+.cal-head {
+  font-size:   .7rem;
+  font-weight: 600;
+  color:       var(--text-muted);
+  text-align:  center;
+  padding:     .35rem 0;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.cal-cell {
+  background:    var(--bg-2);
+  border:        1px solid var(--border);
+  border-radius: var(--radius);
+  padding:       .4rem .45rem;
+  min-height:    80px;
+  cursor:        pointer;
+  transition:    border-color .12s, background .12s;
+  overflow:      hidden;
+}
+.cal-cell:hover           { border-color: var(--border-3); background: var(--bg-3); }
+.cal-cell--empty          { background: transparent; border-color: transparent; cursor: default; }
+.cal-cell--today          { border-color: var(--accent); }
+.cal-cell--today .cal-day-num { color: var(--accent); font-weight: 700; }
+
+.cal-day-num {
+  font-size:   .75rem;
+  font-weight: 500;
+  color:       var(--text-muted);
+  display:     block;
+  margin-bottom: .25rem;
+}
+
+.cal-ev {
+  display:       flex;
+  align-items:   center;
+  gap:           .25rem;
+  font-size:     .68rem;
+  border-radius: 3px;
+  padding:       .1rem .3rem;
+  margin-bottom: .15rem;
+  cursor:        pointer;
+  white-space:   nowrap;
+  overflow:      hidden;
+  text-overflow: ellipsis;
+  max-width:     100%;
+  line-height:   1.4;
+}
+.cal-ev span     { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cal-ev svg      { flex-shrink: 0; }
+.cal-ev--birthday { background: rgba(124,106,247,.15); color: var(--accent); }
+.cal-ev--reminder { background: rgba(224,160,64,.12);  color: var(--warning); }
+.cal-ev:hover    { filter: brightness(1.2); }
+.cal-ev-more     { font-size: .65rem; color: var(--text-dim); padding: 0 .3rem; }
+
+/* Day detail modal */
+.day-detail-list  { display: flex; flex-direction: column; gap: .3rem; margin-bottom: .75rem; }
+.day-detail-ev    {
+  display:       flex;
+  align-items:   center;
+  gap:           .5rem;
+  padding:       .4rem .5rem;
+  border:        1px solid var(--border);
+  border-radius: var(--radius);
+  cursor:        pointer;
+  font-size:     .82rem;
+  transition:    border-color .12s;
+}
+.day-detail-ev:hover { border-color: var(--border-3); }
 
 /* ─── Widget hero image (inspiration) ────────────────────────────────────── */
 .widget-hero {

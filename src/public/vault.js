@@ -9,6 +9,9 @@ let allWidgets  = [];
 let activeFilter = 'all';
 let editingId    = null;  // widget id being edited (null = new)
 let deleteTarget = null;
+let currentView  = 'grid'; // 'grid' | 'calendar'
+let calYear      = new Date().getFullYear();
+let calMonth     = new Date().getMonth(); // 0-indexed
 
 const csrf = () => document.querySelector('meta[name="csrf-token"]').content;
 
@@ -425,6 +428,27 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 
 document.getElementById('widgetSearch').addEventListener('input', renderGrid);
 
+// ─── View toggle (grid / calendar) ────────────────────────────────────────
+function setView(view) {
+  currentView = view;
+  document.getElementById('gridView').style.display     = view === 'grid'     ? '' : 'none';
+  document.getElementById('calendarView').style.display = view === 'calendar' ? '' : 'none';
+  document.getElementById('viewGridBtn').classList.toggle('view-btn--active', view === 'grid');
+  document.getElementById('viewCalBtn').classList.toggle('view-btn--active',  view === 'calendar');
+  const label = document.getElementById('filterLabel');
+  if (view === 'calendar') {
+    label.textContent = 'calendar';
+    document.getElementById('widgetCount').textContent = '';
+    renderCalendar();
+  } else {
+    label.textContent = activeFilter === 'all' ? 'all items' : activeFilter + 's';
+    renderGrid();
+  }
+}
+
+document.getElementById('viewGridBtn').addEventListener('click', () => setView('grid'));
+document.getElementById('viewCalBtn').addEventListener('click',  () => setView('calendar'));
+
 // ─── Add widget ───────────────────────────────────────────────────────────
 document.getElementById('addWidgetBtn').addEventListener('click',      () => openModal(null));
 document.getElementById('addWidgetBtnEmpty').addEventListener('click', () => openModal(null));
@@ -560,6 +584,7 @@ async function saveWidget(type, id) {
 
     closeModal();
     renderGrid();
+    if (currentView === 'calendar') renderCalendar();
     toast(id ? 'saved' : 'added', 'ok');
   } catch (err) {
     errEl.textContent   = err.message || 'Failed to save.';
@@ -619,6 +644,7 @@ document.getElementById('deleteConfirmBtn').addEventListener('click', async () =
     await apiFetch(`/api/widgets/${deleteTarget}`, 'DELETE');
     allWidgets = allWidgets.filter(w => w.id !== deleteTarget);
     renderGrid();
+    if (currentView === 'calendar') renderCalendar();
     toast('deleted', 'ok');
   } catch {
     toast('delete failed', 'err');
@@ -956,6 +982,174 @@ function makeTagsField(tagsStr) {
 
 function tagChip(tag) {
   return `<span class="tags-input-tag" data-tag="${esc(tag)}">${esc(tag)} <button type="button">×</button></span>`;
+}
+
+// ─── Calendar ─────────────────────────────────────────────────────────────
+const CAL_MONTHS = ['January','February','March','April','May','June',
+                    'July','August','September','October','November','December'];
+
+function calDateKey(year, month1, day) {
+  return `${year}-${String(month1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
+function buildCalEvents() {
+  const map = {}; // 'YYYY-MM-DD' → [{widget, label}]
+  const add = (key, entry) => { (map[key] = map[key] || []).push(entry); };
+
+  allWidgets.forEach(w => {
+    if (!w.data) return;
+    if (w.type === 'birthday' && w.data.date) {
+      const [, mm, dd] = w.data.date.split('-');
+      // Show birthday every year on the same MM-DD
+      add(calDateKey(calYear, +mm, +dd),
+          { widget: w, label: w.title || w.data.name_full || 'Birthday' });
+    }
+    if (w.type === 'reminder' && w.data.due_date && !w.data.completed) {
+      const d = new Date(w.data.due_date);
+      add(calDateKey(d.getFullYear(), d.getMonth() + 1, d.getDate()),
+          { widget: w, label: w.title || w.data.content || 'Reminder' });
+    }
+  });
+  return map;
+}
+
+function renderCalendar() {
+  document.getElementById('calTitle').textContent = `${CAL_MONTHS[calMonth]} ${calYear}`;
+
+  const events     = buildCalEvents();
+  const firstDow   = new Date(calYear, calMonth, 1).getDay();      // 0=Sun
+  const startOffset = (firstDow + 6) % 7;                          // Mon=0
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const today       = new Date();
+  const todayKey    = calDateKey(today.getFullYear(), today.getMonth() + 1, today.getDate());
+
+  let html = '';
+  // Day-of-week headers
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d => {
+    html += `<div class="cal-head">${d}</div>`;
+  });
+
+  // Leading empty cells
+  for (let i = 0; i < startOffset; i++) html += `<div class="cal-cell cal-cell--empty"></div>`;
+
+  // Day cells
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key    = calDateKey(calYear, calMonth + 1, d);
+    const evs    = events[key] || [];
+    const isToday = key === todayKey;
+    const show   = evs.slice(0, 3);
+    const more   = evs.length - show.length;
+
+    html += `<div class="cal-cell${isToday ? ' cal-cell--today' : ''}${evs.length ? ' cal-cell--has-events' : ''}" data-date="${key}">
+      <span class="cal-day-num">${d}</span>
+      ${show.map(e => `<div class="cal-ev cal-ev--${e.widget.type}" data-id="${e.widget.id}" title="${esc(e.label)}">
+        ${e.widget.type === 'birthday' ? `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>` : `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`}
+        <span>${esc(e.label.slice(0, 18))}</span>
+      </div>`).join('')}
+      ${more ? `<div class="cal-ev-more">+${more}</div>` : ''}
+    </div>`;
+  }
+
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = html;
+
+  // Cell click → day detail
+  grid.querySelectorAll('.cal-cell:not(.cal-cell--empty)').forEach(cell => {
+    cell.addEventListener('click', e => {
+      if (e.target.closest('.cal-ev')) return; // handled separately
+      openDayDetail(cell.dataset.date, events[cell.dataset.date] || []);
+    });
+  });
+
+  // Event chip click → open edit
+  grid.querySelectorAll('.cal-ev').forEach(ev => {
+    ev.addEventListener('click', e => {
+      e.stopPropagation();
+      openEdit(ev.dataset.id);
+    });
+  });
+}
+
+document.getElementById('calPrev').addEventListener('click', () => {
+  if (--calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+});
+document.getElementById('calNext').addEventListener('click', () => {
+  if (++calMonth > 11) { calMonth = 0; calYear++; }
+  renderCalendar();
+});
+
+function openDayDetail(dateStr, evs) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  document.getElementById('dayDetailModal')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'dayDetailModal';
+  overlay.innerHTML = `
+    <div class="modal modal--sm">
+      <div class="modal-header">
+        <h3 class="modal-title">${esc(label)}</h3>
+        <button class="modal-close" id="dayDetailClose">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      ${evs.length ? `<div class="day-detail-list">${evs.map(e => `
+        <div class="day-detail-ev" data-id="${e.widget.id}">
+          <span class="widget-type-badge" style="font-size:.7rem">${
+            e.widget.type === 'birthday' ? `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> birthday`
+            : `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> reminder`}
+          </span>
+          <span>${esc(e.label)}</span>
+        </div>`).join('')}</div>` : `<p style="font-size:.82rem;color:var(--text-muted);padding:.5rem 0">No events on this day.</p>`}
+      <div class="modal-actions">
+        <button class="btn btn--ghost btn--sm" id="dayAddReminder">+ reminder</button>
+        <button class="btn btn--ghost btn--sm" id="dayAddBirthday">+ birthday</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.querySelector('#dayDetailClose').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  overlay.querySelectorAll('.day-detail-ev').forEach(el => {
+    el.addEventListener('click', () => { close(); openEdit(el.dataset.id); });
+  });
+
+  overlay.querySelector('#dayAddReminder').addEventListener('click', () => {
+    close(); openModalPrefilled('reminder', dateStr);
+  });
+  overlay.querySelector('#dayAddBirthday').addEventListener('click', () => {
+    close(); openModalPrefilled('birthday', dateStr);
+  });
+}
+
+function openModalPrefilled(type, dateStr) {
+  editingId = null;
+  const modal = document.getElementById('widgetModal');
+  document.getElementById('modalTitle').textContent    = 'add item';
+  document.getElementById('typePicker').style.display  = 'none';
+  document.getElementById('widgetForm').style.display  = 'block';
+  document.getElementById('modalError').style.display  = 'none';
+  buildModalForm(type, null);
+
+  // Pre-fill the date field
+  requestAnimationFrame(() => {
+    if (type === 'reminder') {
+      const inp = document.querySelector('[name="due_date"]');
+      if (inp) inp.value = dateStr + 'T00:00';
+    } else if (type === 'birthday') {
+      const inp = document.querySelector('[name="date"]');
+      if (inp) inp.value = dateStr;
+    }
+  });
+
+  modal.style.display = 'flex';
+  modal.focus();
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────
