@@ -46,7 +46,14 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
+
+.landing,
+.auth-page,
+.vault-page,
+.error-page { flex: 1; }
 
 a { color: var(--text); text-decoration: none; }
 img, video { max-width: 100%; display: block; }
