@@ -600,79 +600,92 @@ function makeIconUploadField(name, label, value) {
   const wrap = document.createElement('div');
   wrap.className = 'field';
 
+  const PLACEHOLDER_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+
   wrap.innerHTML = `
     <label class="field-label">${esc(label)}</label>
     <input type="hidden" name="${name}" value="${esc(value)}" />
     <div class="icon-upload-wrap">
       <div class="icon-upload-preview ${value ? '' : 'icon-upload-preview--empty'}">
-        ${value
-          ? `<img src="${esc(value)}" alt="" width="28" height="28" />`
-          : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`}
+        ${value ? `<img src="${esc(value)}" alt="" width="28" height="28" />` : PLACEHOLDER_SVG}
       </div>
       <label class="btn btn--ghost btn--sm icon-upload-btn">
-        ${value ? 'change' : 'upload icon'}
+        ${value ? 'change' : 'upload'}
         <input type="file" accept="image/*" style="display:none" />
       </label>
       ${value ? `<button type="button" class="btn btn--ghost btn--sm icon-upload-clear">remove</button>` : ''}
-      <div class="icon-upload-err" style="display:none;font-size:.75rem;color:var(--danger)"></div>
-    </div>`;
+    </div>
+    <div class="icon-url-wrap">
+      <input class="field-input icon-url-input" type="url" placeholder="or paste image URL…" value="" />
+    </div>
+    <div class="icon-upload-err" style="display:none;font-size:.75rem;color:var(--danger);margin-top:.25rem"></div>`;
 
-  const hidden  = wrap.querySelector(`input[name="${name}"]`);
-  const preview = wrap.querySelector('.icon-upload-preview');
-  const actions = wrap.querySelector('.icon-upload-wrap');
+  const hidden    = wrap.querySelector(`input[name="${name}"]`);
+  const preview   = wrap.querySelector('.icon-upload-preview');
+  const actions   = wrap.querySelector('.icon-upload-wrap');
   const fileInput = wrap.querySelector('input[type="file"]');
-  const errEl = wrap.querySelector('.icon-upload-err');
+  const urlInput  = wrap.querySelector('.icon-url-input');
+  const errEl     = wrap.querySelector('.icon-upload-err');
+
+  function setIcon(url) {
+    hidden.value = url;
+    preview.classList.remove('icon-upload-preview--empty');
+    preview.innerHTML = `<img src="${esc(url)}" alt="" width="28" height="28" />`;
+    const lbl = actions.querySelector('.icon-upload-btn');
+    lbl.childNodes[0].textContent = 'change ';
+    let clearBtn = actions.querySelector('.icon-upload-clear');
+    if (!clearBtn) {
+      clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'btn btn--ghost btn--sm icon-upload-clear';
+      clearBtn.textContent = 'remove';
+      lbl.after(clearBtn);
+      clearBtn.addEventListener('click', clearIcon);
+    }
+  }
+
+  function clearIcon() {
+    hidden.value = '';
+    urlInput.value = '';
+    preview.classList.add('icon-upload-preview--empty');
+    preview.innerHTML = PLACEHOLDER_SVG;
+    const clearBtn = actions.querySelector('.icon-upload-clear');
+    if (clearBtn) clearBtn.remove();
+    const lbl = actions.querySelector('.icon-upload-btn');
+    lbl.childNodes[0].textContent = 'upload ';
+  }
 
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];
     if (!file) return;
     errEl.style.display = 'none';
-
     const fd = new FormData();
     fd.append('icon', file);
-
     try {
-      const res = await fetch('/api/widgets/icon', {
+      const res  = await fetch('/api/widgets/icon', {
         method: 'POST',
         headers: { 'X-CSRF-Token': csrf() },
         body: fd,
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Upload failed.');
-
-      hidden.value = json.url;
-      preview.classList.remove('icon-upload-preview--empty');
-      preview.innerHTML = `<img src="${esc(json.url)}" alt="" width="28" height="28" />`;
-
-      // Update button label + ensure clear button exists
-      const lbl = actions.querySelector('.icon-upload-btn');
-      lbl.childNodes[0].textContent = 'change ';
-
-      let clearBtn = actions.querySelector('.icon-upload-clear');
-      if (!clearBtn) {
-        clearBtn = document.createElement('button');
-        clearBtn.type = 'button';
-        clearBtn.className = 'btn btn--ghost btn--sm icon-upload-clear';
-        clearBtn.textContent = 'remove';
-        lbl.after(clearBtn);
-        clearBtn.addEventListener('click', clearIcon);
-      }
+      setIcon(json.url);
+      urlInput.value = '';
     } catch (e) {
-      errEl.textContent = e.message;
-      errEl.style.display = 'inline';
+      errEl.textContent   = e.message;
+      errEl.style.display = 'block';
     }
     fileInput.value = '';
   });
 
-  function clearIcon() {
-    hidden.value = '';
-    preview.classList.add('icon-upload-preview--empty');
-    preview.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
-    const clearBtn = actions.querySelector('.icon-upload-clear');
-    if (clearBtn) clearBtn.remove();
-    const lbl = actions.querySelector('.icon-upload-btn');
-    lbl.childNodes[0].textContent = 'upload icon ';
-  }
+  urlInput.addEventListener('change', () => {
+    const url = urlInput.value.trim();
+    if (!url) return;
+    errEl.style.display = 'none';
+    try { new URL(url); } catch { return; }
+    setIcon(url);
+    urlInput.value = '';
+  });
 
   const existingClear = wrap.querySelector('.icon-upload-clear');
   if (existingClear) existingClear.addEventListener('click', clearIcon);

@@ -1152,6 +1152,9 @@ button.nav-link { background: none; border: none; cursor: pointer; font-family: 
 
 .icon-upload-btn { cursor: pointer; }
 
+.icon-url-wrap { margin-top: .4rem; }
+.icon-url-input { font-size: .78rem; }
+
 /* ─── Error page ──────────────────────────────────────────────────────────── */
 .error-page {
   position: relative;
