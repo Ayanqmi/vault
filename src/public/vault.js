@@ -373,6 +373,8 @@ function buildModalForm(type, existing) {
   const fields  = document.getElementById('modalFields');
   const saveBtn = document.getElementById('modalSave');
   fields.innerHTML = '';
+  saveBtn.disabled    = false;
+  saveBtn.textContent = 'save';
 
   const data = existing?.data || {};
 
