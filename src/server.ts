@@ -13,6 +13,12 @@ import authRouter  from './routes/auth';
 import vaultRouter from './routes/vault';
 import apiRouter   from './routes/api';
 
+// ─── Startup safety checks ────────────────────────────────────────────────────
+if (!process.env.SESSION_SECRET) {
+  console.error('[FATAL] SESSION_SECRET environment variable is not set. Refusing to start.');
+  process.exit(1);
+}
+
 const app = express();
 
 // ─── View engine ──────────────────────────────────────────────────────────────
@@ -21,9 +27,14 @@ app.set('views', path.join(__dirname, 'views'));
 
 // ─── Static files ─────────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
-// Serve user-uploaded widget icons
+// Serve user-uploaded widget icons (organised by user ID)
 const ICONS_DIR = path.resolve(process.env.DATA_DIR || './data', 'icons');
-app.use('/icons', express.static(ICONS_DIR));
+app.use('/icons', express.static(ICONS_DIR, {
+  // Prevent content-type sniffing for served files
+  setHeaders: (res) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+  },
+}));
 
 // ─── Body parsers ─────────────────────────────────────────────────────────────
 app.use(express.json());
@@ -39,7 +50,7 @@ app.use(session({
     db: 'sessions.db',
     dir: dbDir,
   }) as session.Store,
-  secret: process.env.SESSION_SECRET || 'change-me-in-production',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -59,13 +70,19 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:  ["'self'"],
-      scriptSrc:   ["'self'", "'unsafe-inline'"],
+      // No unsafe-inline — all scripts are external files
+      scriptSrc:   ["'self'"],
+      // unsafe-inline kept only for styles (no inline <style> injection risk)
       styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc:     ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc:      ["'self'", 'data:', 'https://www.google.com'],
+      // Allow self (uploaded icons), data URIs, Google favicons, and any HTTPS
+      // image (users may paste external icon URLs)
+      imgSrc:      ["'self'", 'data:', 'https:'],
       connectSrc:  ["'self'"],
       frameSrc:    ["'none'"],
       workerSrc:   ["'none'"],
+      objectSrc:   ["'none'"],
+      baseUri:     ["'self'"],
     },
   },
 }));

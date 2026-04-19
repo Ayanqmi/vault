@@ -731,7 +731,8 @@ function makeIconUploadField(name, label, value) {
   }
 
   function clearIcon() {
-    hidden.value = '';
+    const prev = hidden.value;
+    hidden.value  = '';
     urlInput.value = '';
     preview.classList.add('icon-upload-preview--empty');
     preview.innerHTML = PLACEHOLDER_SVG;
@@ -739,6 +740,14 @@ function makeIconUploadField(name, label, value) {
     if (clearBtn) clearBtn.remove();
     const lbl = actions.querySelector('.icon-upload-btn');
     lbl.childNodes[0].textContent = 'upload ';
+    // Delete server-side icon if it was uploaded (not an external URL)
+    if (prev && prev.startsWith('/icons/')) {
+      fetch('/api/widgets/icon', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() },
+        body: JSON.stringify({ url: prev }),
+      }).catch(() => {});
+    }
   }
 
   fileInput.addEventListener('change', async () => {

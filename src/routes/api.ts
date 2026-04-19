@@ -3,12 +3,13 @@ import { nanoid } from 'nanoid';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import rateLimit from 'express-rate-limit';
 import { widgetQueries, WidgetRow, vaultProfileQueries } from '../db/database';
 import { validateCsrf } from '../middleware/csrf';
 
 const router = Router();
 
-// API-specific auth guard — returns JSON instead of redirecting
+// ─── Auth guard — returns JSON instead of redirecting ─────────────────────────
 function requireVaultOpenJson(req: Request, res: Response, next: NextFunction): void {
   if (!req.session?.userId) {
     res.status(401).json({ error: 'Not logged in.' });
@@ -24,33 +25,71 @@ function requireVaultOpenJson(req: Request, res: Response, next: NextFunction): 
 router.use(requireVaultOpenJson);
 router.use(validateCsrf);
 
-const ICONS_DIR = path.resolve(process.env.DATA_DIR || './data', 'icons');
+// ─── Rate limiters ────────────────────────────────────────────────────────────
+const widgetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  keyGenerator: (req) => String((req.session as any)?.userId ?? req.ip),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+
+const iconLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 30,
+  keyGenerator: (req) => String((req.session as any)?.userId ?? req.ip),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many icon uploads. Try again later.' },
+});
+
+// ─── Icon upload setup ────────────────────────────────────────────────────────
+const ICONS_DIR       = path.resolve(process.env.DATA_DIR || './data', 'icons');
+const MAX_ICONS       = 30;                           // per user
+const MAX_ENC_BYTES   = 64 * 1024;                   // 64 KB max per encrypted blob
+const ALLOWED_MIMES   = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const MIME_EXT: Record<string, string> = {
+  'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp',
+};
+
 fs.mkdirSync(ICONS_DIR, { recursive: true });
 
 const iconUpload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, ICONS_DIR),
-    filename:    (_req, _file, cb) => cb(null, `${nanoid(16)}.png`),
-  }),
-  limits: { fileSize: 2 * 1024 * 1024 },
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: 2 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Not an image.') as any, false);
+    if (ALLOWED_MIMES.has(file.mimetype)) cb(null, true);
+    else cb(new Error('Only PNG, JPEG, GIF and WebP images are allowed.') as any, false);
   },
 });
+
+/** Verify file magic bytes — client-supplied MIME type is untrusted */
+function hasValidMagic(buf: Buffer): boolean {
+  if (buf.length < 12) return false;
+  // PNG
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return true;
+  // JPEG
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return true;
+  // GIF
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return true;
+  // WebP (RIFF....WEBP)
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return true;
+  return false;
+}
 
 const WIDGET_TYPES = ['note', 'reminder', 'bookmark', 'account', 'birthday'] as const;
 type WidgetType = typeof WIDGET_TYPES[number];
 
 // ─── GET /api/widgets ─────────────────────────────────────────────────────────
-router.get('/widgets', (req: Request, res: Response) => {
+router.get('/widgets', widgetLimiter, (req: Request, res: Response) => {
   const user    = res.locals.user;
   const widgets = widgetQueries.listByUser.all(user.id);
   res.json({ widgets });
 });
 
 // ─── POST /api/widgets ────────────────────────────────────────────────────────
-router.post('/widgets', (req: Request, res: Response) => {
+router.post('/widgets', widgetLimiter, (req: Request, res: Response) => {
   const user = res.locals.user;
   const { type, title, data_enc, data_iv, tags } = req.body as {
     type:     string;
@@ -66,9 +105,12 @@ router.post('/widgets', (req: Request, res: Response) => {
   if (!data_enc || !data_iv) {
     return res.status(400).json({ error: 'Encrypted payload required.' });
   }
+  if (data_enc.length > MAX_ENC_BYTES) {
+    return res.status(400).json({ error: 'Payload too large.' });
+  }
 
-  const id       = nanoid(12);
-  const tagStr   = JSON.stringify(Array.isArray(tags) ? tags : []);
+  const id        = nanoid(12);
+  const tagStr    = JSON.stringify(Array.isArray(tags) ? tags : []);
   const safeTitle = (title || '').toString().slice(0, 200);
 
   widgetQueries.insert.run(id, user.id, type, safeTitle, data_enc, data_iv, tagStr);
@@ -78,7 +120,7 @@ router.post('/widgets', (req: Request, res: Response) => {
 });
 
 // ─── PUT /api/widgets/:id ─────────────────────────────────────────────────────
-router.put('/widgets/:id', (req: Request, res: Response) => {
+router.put('/widgets/:id', widgetLimiter, (req: Request, res: Response) => {
   const user = res.locals.user;
   const { id } = req.params;
   const { title, data_enc, data_iv, tags, pinned } = req.body as {
@@ -95,6 +137,9 @@ router.put('/widgets/:id', (req: Request, res: Response) => {
   if (!data_enc || !data_iv) {
     return res.status(400).json({ error: 'Encrypted payload required.' });
   }
+  if (data_enc.length > MAX_ENC_BYTES) {
+    return res.status(400).json({ error: 'Payload too large.' });
+  }
 
   const safeTitle = (title !== undefined ? title : existing.title).toString().slice(0, 200);
   const tagStr    = JSON.stringify(Array.isArray(tags) ? tags : JSON.parse(existing.tags));
@@ -107,7 +152,7 @@ router.put('/widgets/:id', (req: Request, res: Response) => {
 });
 
 // ─── DELETE /api/widgets/:id ──────────────────────────────────────────────────
-router.delete('/widgets/:id', (req: Request, res: Response) => {
+router.delete('/widgets/:id', widgetLimiter, (req: Request, res: Response) => {
   const user = res.locals.user;
   const { id } = req.params;
 
@@ -119,7 +164,7 @@ router.delete('/widgets/:id', (req: Request, res: Response) => {
 });
 
 // ─── POST /api/widgets/reorder ────────────────────────────────────────────────
-router.post('/widgets/reorder', (req: Request, res: Response) => {
+router.post('/widgets/reorder', widgetLimiter, (req: Request, res: Response) => {
   const user = res.locals.user;
   const { order } = req.body as { order: string[] };
 
@@ -134,7 +179,6 @@ router.post('/widgets/reorder', (req: Request, res: Response) => {
 });
 
 // ─── GET /api/vault-info ──────────────────────────────────────────────────────
-// Returns salt + encrypted test blob so the client can attempt decryption
 router.get('/vault-info', (req: Request, res: Response) => {
   const profile = vaultProfileQueries.find.get(res.locals.user.id);
   res.json({
@@ -145,12 +189,51 @@ router.get('/vault-info', (req: Request, res: Response) => {
 });
 
 // ─── POST /api/widgets/icon ───────────────────────────────────────────────────
-router.post('/widgets/icon', iconUpload.single('icon'), (req: Request, res: Response) => {
+router.post('/widgets/icon', iconLimiter, iconUpload.single('icon'), (req: Request, res: Response) => {
+  const user = res.locals.user;
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
-  res.json({ url: `/icons/${req.file.filename}` });
+
+  const buf = req.file.buffer;
+
+  if (!hasValidMagic(buf)) {
+    return res.status(400).json({ error: 'Invalid image file.' });
+  }
+
+  // Per-user directory and count cap
+  const userDir = path.join(ICONS_DIR, String(user.id));
+  fs.mkdirSync(userDir, { recursive: true });
+
+  const existing = fs.readdirSync(userDir);
+  if (existing.length >= MAX_ICONS) {
+    return res.status(400).json({ error: `Icon limit reached (max ${MAX_ICONS}).` });
+  }
+
+  const ext      = MIME_EXT[req.file.mimetype] || 'png';
+  const filename = `${nanoid(16)}.${ext}`;
+  fs.writeFileSync(path.join(userDir, filename), buf);
+
+  res.json({ url: `/icons/${user.id}/${filename}` });
 });
 
-// ─── JSON error handler (prevents HTML 500 pages leaking to fetch() callers) ──
+// ─── DELETE /api/widgets/icon ─────────────────────────────────────────────────
+router.delete('/widgets/icon', (req: Request, res: Response) => {
+  const user = res.locals.user;
+  const { url } = req.body as { url?: string };
+
+  // Only allow deleting icons owned by this user: /icons/{userId}/{filename}
+  const match = (url || '').match(/^\/icons\/(\d+)\/([a-zA-Z0-9_-]+\.(png|jpg|gif|webp))$/);
+  if (!match || parseInt(match[1], 10) !== user.id) {
+    return res.status(400).json({ error: 'Invalid icon URL.' });
+  }
+
+  const filepath = path.join(ICONS_DIR, String(user.id), match[2]);
+  try {
+    if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+  } catch { /* best-effort */ }
+  res.json({ ok: true });
+});
+
+// ─── JSON error handler ───────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 router.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[API ERROR]', err.message);

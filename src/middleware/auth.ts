@@ -8,8 +8,9 @@ export function attachUser(req: Request, res: Response, next: NextFunction): voi
     const user    = ayanamiUserQueries.findById.get(req.session.userId);
     const profile = vaultProfileQueries.find.get(req.session.userId);
     if (user) {
-      // Merge ayanami user + vault profile so templates see one object
-      res.locals.user = { ...user, ...profile };
+      // Merge ayanami user + vault profile — strip sensitive fields
+      const { passwordHash: _pw, ...safeUser } = user as typeof user & { passwordHash?: string };
+      res.locals.user = { ...safeUser, ...profile };
     } else {
       req.session.destroy(() => {});
     }
