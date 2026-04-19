@@ -152,19 +152,26 @@ function faviconImg(url) {
   } catch { return ''; }
 }
 
+function widgetBadgeIcon(w) {
+  if (w.data?.icon_url) {
+    return `<img class="widget-favicon" src="${esc(w.data.icon_url)}" alt="" width="14" height="14" />`;
+  }
+  const url = widgetUrl(w);
+  return url ? faviconImg(url) : '';
+}
+
 function buildWidgetEl(w) {
   const el = document.createElement('div');
   el.className = 'widget' + (w.pinned ? ' widget--pinned' : '');
   el.dataset.id = w.id;
 
-  const url = widgetUrl(w);
-  const favicon = (url && (w.type === 'bookmark' || w.type === 'account')) ? faviconImg(url) : '';
+  const badge = widgetBadgeIcon(w);
 
   const typeMeta = {
     note:     { label: 'note',     icon: noteIcon() },
     reminder: { label: 'reminder', icon: reminderIcon() },
-    bookmark: { label: 'bookmark', icon: favicon || bookmarkIcon() },
-    account:  { label: 'account',  icon: favicon || accountIcon() },
+    bookmark: { label: 'bookmark', icon: badge || bookmarkIcon() },
+    account:  { label: 'account',  icon: badge || accountIcon() },
     birthday: { label: 'birthday', icon: birthdayIcon() },
   };
   const meta = typeMeta[w.type] || { label: w.type, icon: '' };
@@ -389,6 +396,7 @@ function buildModalForm(type, existing) {
       break;
 
     case 'account':
+      fields.appendChild(makeIconUploadField('icon_url', 'Icon', data.icon_url || ''));
       fields.appendChild(makeField('username', 'Username', 'text', data.username || '', '', false, false));
       fields.appendChild(makeField('email', 'Email', 'email', data.email || '', '', false, false));
       fields.appendChild(makePasswordField('password', 'Password', data.password || ''));
@@ -460,7 +468,7 @@ function collectPayload(type, fields) {
     case 'note':     return { content: get('content') };
     case 'reminder': return { content: get('content'), due_date: get('due_date'), completed: getChecked('completed') };
     case 'bookmark': return { url: get('url'), description: get('description') };
-    case 'account':  return { username: get('username'), email: get('email'), password: get('password'), url: get('url'), notes: get('notes') };
+    case 'account':  return { icon_url: get('icon_url'), username: get('username'), email: get('email'), password: get('password'), url: get('url'), notes: get('notes') };
     case 'birthday': return { name_full: get('name_full'), date: get('date'), notes: get('notes') };
     default:         return {};
   }
@@ -583,6 +591,90 @@ function makeCheckbox(name, label, checked) {
       <input type="checkbox" name="${name}" ${checked ? 'checked' : ''} />
       ${esc(label)}
     </label>`;
+  return wrap;
+}
+
+function makeIconUploadField(name, label, value) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field';
+
+  wrap.innerHTML = `
+    <label class="field-label">${esc(label)}</label>
+    <input type="hidden" name="${name}" value="${esc(value)}" />
+    <div class="icon-upload-wrap">
+      <div class="icon-upload-preview ${value ? '' : 'icon-upload-preview--empty'}">
+        ${value
+          ? `<img src="${esc(value)}" alt="" width="28" height="28" />`
+          : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`}
+      </div>
+      <label class="btn btn--ghost btn--sm icon-upload-btn">
+        ${value ? 'change' : 'upload icon'}
+        <input type="file" accept="image/*" style="display:none" />
+      </label>
+      ${value ? `<button type="button" class="btn btn--ghost btn--sm icon-upload-clear">remove</button>` : ''}
+      <div class="icon-upload-err" style="display:none;font-size:.75rem;color:var(--danger)"></div>
+    </div>`;
+
+  const hidden  = wrap.querySelector(`input[name="${name}"]`);
+  const preview = wrap.querySelector('.icon-upload-preview');
+  const actions = wrap.querySelector('.icon-upload-wrap');
+  const fileInput = wrap.querySelector('input[type="file"]');
+  const errEl = wrap.querySelector('.icon-upload-err');
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    errEl.style.display = 'none';
+
+    const fd = new FormData();
+    fd.append('icon', file);
+
+    try {
+      const res = await fetch('/api/widgets/icon', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrf() },
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Upload failed.');
+
+      hidden.value = json.url;
+      preview.classList.remove('icon-upload-preview--empty');
+      preview.innerHTML = `<img src="${esc(json.url)}" alt="" width="28" height="28" />`;
+
+      // Update button label + ensure clear button exists
+      const lbl = actions.querySelector('.icon-upload-btn');
+      lbl.childNodes[0].textContent = 'change ';
+
+      let clearBtn = actions.querySelector('.icon-upload-clear');
+      if (!clearBtn) {
+        clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'btn btn--ghost btn--sm icon-upload-clear';
+        clearBtn.textContent = 'remove';
+        lbl.after(clearBtn);
+        clearBtn.addEventListener('click', clearIcon);
+      }
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.style.display = 'inline';
+    }
+    fileInput.value = '';
+  });
+
+  function clearIcon() {
+    hidden.value = '';
+    preview.classList.add('icon-upload-preview--empty');
+    preview.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+    const clearBtn = actions.querySelector('.icon-upload-clear');
+    if (clearBtn) clearBtn.remove();
+    const lbl = actions.querySelector('.icon-upload-btn');
+    lbl.childNodes[0].textContent = 'upload icon ';
+  }
+
+  const existingClear = wrap.querySelector('.icon-upload-clear');
+  if (existingClear) existingClear.addEventListener('click', clearIcon);
+
   return wrap;
 }
 

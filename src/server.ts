@@ -21,6 +21,9 @@ app.set('views', path.join(__dirname, 'views'));
 
 // ─── Static files ─────────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
+// Serve user-uploaded widget icons
+const ICONS_DIR = path.resolve(process.env.DATA_DIR || './data', 'icons');
+app.use('/icons', express.static(ICONS_DIR));
 
 // ─── Body parsers ─────────────────────────────────────────────────────────────
 app.use(express.json());
@@ -59,7 +62,7 @@ app.use(helmet({
       scriptSrc:   ["'self'", "'unsafe-inline'"],
       styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc:     ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc:      ["'self'", 'data:'],
+      imgSrc:      ["'self'", 'data:', 'https://www.google.com'],
       connectSrc:  ["'self'"],
       frameSrc:    ["'none'"],
       workerSrc:   ["'none'"],

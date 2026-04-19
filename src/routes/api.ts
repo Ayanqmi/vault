@@ -1,5 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { nanoid } from 'nanoid';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import { widgetQueries, WidgetRow, vaultProfileQueries } from '../db/database';
 import { validateCsrf } from '../middleware/csrf';
 
@@ -20,6 +23,21 @@ function requireVaultOpenJson(req: Request, res: Response, next: NextFunction): 
 
 router.use(requireVaultOpenJson);
 router.use(validateCsrf);
+
+const ICONS_DIR = path.resolve(process.env.DATA_DIR || './data', 'icons');
+fs.mkdirSync(ICONS_DIR, { recursive: true });
+
+const iconUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, ICONS_DIR),
+    filename:    (_req, _file, cb) => cb(null, `${nanoid(16)}.png`),
+  }),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Not an image.') as any, false);
+  },
+});
 
 const WIDGET_TYPES = ['note', 'reminder', 'bookmark', 'account', 'birthday'] as const;
 type WidgetType = typeof WIDGET_TYPES[number];
@@ -124,6 +142,19 @@ router.get('/vault-info', (req: Request, res: Response) => {
     vault_test:    profile?.vault_test    || null,
     vault_test_iv: profile?.vault_test_iv || null,
   });
+});
+
+// ─── POST /api/widgets/icon ───────────────────────────────────────────────────
+router.post('/widgets/icon', iconUpload.single('icon'), (req: Request, res: Response) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+  res.json({ url: `/icons/${req.file.filename}` });
+});
+
+// ─── JSON error handler (prevents HTML 500 pages leaking to fetch() callers) ──
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+router.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('[API ERROR]', err.message);
+  res.status(500).json({ error: err.message || 'Internal error.' });
 });
 
 export default router;
