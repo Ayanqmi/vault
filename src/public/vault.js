@@ -168,7 +168,7 @@ function buildWidgetEl(w) {
   const badge = widgetBadgeIcon(w);
 
   const typeMeta = {
-    note:     { label: 'note',     icon: noteIcon() },
+    note:     { label: 'note',     icon: badge || noteIcon() },
     reminder: { label: 'reminder', icon: reminderIcon() },
     bookmark: { label: 'bookmark', icon: badge || bookmarkIcon() },
     account:  { label: 'account',  icon: badge || accountIcon() },
@@ -178,6 +178,9 @@ function buildWidgetEl(w) {
 
   el.innerHTML = `
     <div class="widget-header">
+      <div class="widget-drag-handle" title="drag to reorder">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><circle cx="2" cy="2" r="1"/><circle cx="8" cy="2" r="1"/><circle cx="2" cy="5" r="1"/><circle cx="8" cy="5" r="1"/><circle cx="2" cy="8" r="1"/><circle cx="8" cy="8" r="1"/></svg>
+      </div>
       <div>
         <div class="widget-type-badge">${meta.icon}${meta.label}</div>
         <div class="widget-title">${esc(w.title || 'Untitled')}</div>
@@ -220,7 +223,80 @@ function buildWidgetEl(w) {
     });
   });
 
+  enableDrag(el, w.id);
   return el;
+}
+
+// ─── Drag to reorder ──────────────────────────────────────────────────────────
+let dragSrcId = null;
+
+function enableDrag(el, widgetId) {
+  const handle = el.querySelector('.widget-drag-handle');
+
+  // Only start drag from the handle
+  handle.addEventListener('mousedown', () => { el.draggable = true; });
+  el.addEventListener('dragend',       () => { el.draggable = false; });
+
+  el.addEventListener('dragstart', e => {
+    if (!el.draggable) { e.preventDefault(); return; }
+    dragSrcId = widgetId;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', widgetId);
+    // Defer adding class so the drag ghost isn't affected
+    requestAnimationFrame(() => el.classList.add('widget--dragging'));
+  });
+
+  el.addEventListener('dragover', e => {
+    e.preventDefault();
+    if (!dragSrcId || dragSrcId === widgetId) return;
+    e.dataTransfer.dropEffect = 'move';
+    // Determine insert position: before or after based on mouse Y
+    const rect = el.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    document.querySelectorAll('.widget--drop-before, .widget--drop-after')
+      .forEach(w => w.classList.remove('widget--drop-before', 'widget--drop-after'));
+    el.classList.add(before ? 'widget--drop-before' : 'widget--drop-after');
+  });
+
+  el.addEventListener('dragleave', e => {
+    if (!el.contains(e.relatedTarget)) {
+      el.classList.remove('widget--drop-before', 'widget--drop-after');
+    }
+  });
+
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    el.classList.remove('widget--drop-before', 'widget--drop-after');
+    if (!dragSrcId || dragSrcId === widgetId) return;
+
+    const rect   = el.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+
+    const srcIdx = allWidgets.findIndex(w => w.id === dragSrcId);
+    let   dstIdx = allWidgets.findIndex(w => w.id === widgetId);
+    if (srcIdx === -1 || dstIdx === -1) return;
+
+    const [moved] = allWidgets.splice(srcIdx, 1);
+    // Recalculate dstIdx after removal
+    dstIdx = allWidgets.findIndex(w => w.id === widgetId);
+    allWidgets.splice(before ? dstIdx : dstIdx + 1, 0, moved);
+
+    renderGrid();
+    saveOrder();
+  });
+
+  el.addEventListener('dragend', () => {
+    dragSrcId = null;
+    el.draggable = false;
+    el.classList.remove('widget--dragging');
+    document.querySelectorAll('.widget--drop-before, .widget--drop-after')
+      .forEach(w => w.classList.remove('widget--drop-before', 'widget--drop-after'));
+  });
+}
+
+async function saveOrder() {
+  const order = allWidgets.map(w => w.id);
+  try { await apiFetch('/api/widgets/reorder', 'POST', { order }); } catch { /* cosmetic */ }
 }
 
 function renderWidgetBody(w) {
@@ -383,6 +459,7 @@ function buildModalForm(type, existing) {
 
   switch (type) {
     case 'note':
+      fields.appendChild(makeIconUploadField('icon_url', 'Icon', data.icon_url || ''));
       fields.appendChild(makeTextarea('content', 'Note', data.content || '', 'Write your note…'));
       break;
 
@@ -467,7 +544,7 @@ function collectPayload(type, fields) {
   const get = name => fields.querySelector(`[name="${name}"]`)?.value.trim() || '';
   const getChecked = name => !!(fields.querySelector(`[name="${name}"]`)?.checked);
   switch (type) {
-    case 'note':     return { content: get('content') };
+    case 'note':     return { icon_url: get('icon_url'), content: get('content') };
     case 'reminder': return { content: get('content'), due_date: get('due_date'), completed: getChecked('completed') };
     case 'bookmark': return { url: get('url'), description: get('description') };
     case 'account':  return { icon_url: get('icon_url'), username: get('username'), email: get('email'), password: get('password'), url: get('url'), notes: get('notes') };

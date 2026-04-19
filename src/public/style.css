@@ -739,6 +739,9 @@ button.nav-link { background: none; border: none; cursor: pointer; font-family: 
 }
 .widget:hover             { border-color: var(--border-3); }
 .widget--pinned           { border-color: var(--border-3); }
+.widget--dragging         { opacity: .35; pointer-events: none; }
+.widget--drop-before      { box-shadow: 0 -2px 0 var(--accent); }
+.widget--drop-after       { box-shadow: 0  2px 0 var(--accent); }
 
 @keyframes widgetIn {
   from { opacity: 0; transform: translateY(8px); }
@@ -752,6 +755,18 @@ button.nav-link { background: none; border: none; cursor: pointer; font-family: 
   gap: 0.5rem;
   margin-bottom: 0.55rem;
 }
+
+.widget-drag-handle {
+  color:        var(--text-dim);
+  cursor:       grab;
+  padding:      2px 0;
+  flex-shrink:  0;
+  opacity:      0;
+  transition:   opacity .15s;
+  user-select:  none;
+}
+.widget:hover .widget-drag-handle { opacity: 1; }
+.widget-drag-handle:active        { cursor: grabbing; }
 
 .widget-type-badge {
   display: inline-flex;
