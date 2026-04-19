@@ -137,16 +137,34 @@ function renderGrid() {
   filtered.forEach(w => grid.appendChild(buildWidgetEl(w)));
 }
 
+// Extract a usable URL from a widget's decrypted data (bookmark or account)
+function widgetUrl(w) {
+  if (!w.data) return null;
+  const raw = w.data.url || '';
+  if (!raw) return null;
+  try { return new URL(raw).hostname ? raw : null; } catch { return null; }
+}
+
+function faviconImg(url) {
+  try {
+    const host = new URL(url).hostname;
+    return `<img class="widget-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=16" alt="" width="14" height="14" />`;
+  } catch { return ''; }
+}
+
 function buildWidgetEl(w) {
   const el = document.createElement('div');
   el.className = 'widget' + (w.pinned ? ' widget--pinned' : '');
   el.dataset.id = w.id;
 
+  const url = widgetUrl(w);
+  const favicon = (url && (w.type === 'bookmark' || w.type === 'account')) ? faviconImg(url) : '';
+
   const typeMeta = {
     note:     { label: 'note',     icon: noteIcon() },
     reminder: { label: 'reminder', icon: reminderIcon() },
-    bookmark: { label: 'bookmark', icon: bookmarkIcon() },
-    account:  { label: 'account',  icon: accountIcon() },
+    bookmark: { label: 'bookmark', icon: favicon || bookmarkIcon() },
+    account:  { label: 'account',  icon: favicon || accountIcon() },
     birthday: { label: 'birthday', icon: birthdayIcon() },
   };
   const meta = typeMeta[w.type] || { label: w.type, icon: '' };

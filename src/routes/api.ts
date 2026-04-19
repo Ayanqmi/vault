@@ -1,13 +1,24 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { nanoid } from 'nanoid';
 import { widgetQueries, WidgetRow, vaultProfileQueries } from '../db/database';
-import { requireVaultOpen } from '../middleware/auth';
 import { validateCsrf } from '../middleware/csrf';
 
 const router = Router();
 
-// All API routes require vault to be unlocked
-router.use(requireVaultOpen);
+// API-specific auth guard — returns JSON instead of redirecting
+function requireVaultOpenJson(req: Request, res: Response, next: NextFunction): void {
+  if (!req.session?.userId) {
+    res.status(401).json({ error: 'Not logged in.' });
+    return;
+  }
+  if (!req.session?.vaultUnlocked) {
+    res.status(401).json({ error: 'Vault is locked.' });
+    return;
+  }
+  next();
+}
+
+router.use(requireVaultOpenJson);
 router.use(validateCsrf);
 
 const WIDGET_TYPES = ['note', 'reminder', 'bookmark', 'account', 'birthday'] as const;
@@ -106,7 +117,7 @@ router.post('/widgets/reorder', (req: Request, res: Response) => {
 
 // ─── GET /api/vault-info ──────────────────────────────────────────────────────
 // Returns salt + encrypted test blob so the client can attempt decryption
-router.get('/vault-info', requireVaultOpen, (req: Request, res: Response) => {
+router.get('/vault-info', (req: Request, res: Response) => {
   const profile = vaultProfileQueries.find.get(res.locals.user.id);
   res.json({
     vault_salt:    profile?.vault_salt    || null,
