@@ -1141,6 +1141,67 @@ button.nav-link { background: none; border: none; cursor: pointer; font-family: 
 }
 .tags-input-field::placeholder { color: var(--text-dim); }
 
+/* ─── Widget hero image (inspiration) ────────────────────────────────────── */
+.widget-hero {
+  margin:        -.75rem -.75rem .65rem;
+  border-radius: var(--radius) var(--radius) 0 0;
+  overflow:      hidden;
+  line-height:   0;
+  background:    var(--bg-3);
+}
+.widget-hero img {
+  width:      100%;
+  max-height: 220px;
+  object-fit: cover;
+  display:    block;
+}
+
+/* ─── Inline image inside note body ──────────────────────────────────────── */
+.widget-inline-image {
+  margin-top:    .65rem;
+  border-radius: calc(var(--radius) - 2px);
+  overflow:      hidden;
+  line-height:   0;
+}
+.widget-inline-image img {
+  width:      100%;
+  max-height: 180px;
+  object-fit: cover;
+  display:    block;
+}
+
+/* ─── Inspiration caption ─────────────────────────────────────────────────── */
+.widget-inspiration-caption {
+  font-size:  .82rem;
+  color:      var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ─── Image upload field (larger than icon upload) ────────────────────────── */
+.image-field-preview {
+  width:           100%;
+  min-height:      120px;
+  border:          1px solid var(--border-2);
+  border-radius:   var(--radius);
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  overflow:        hidden;
+  background:      var(--bg-3);
+  margin-bottom:   .4rem;
+}
+.image-field-preview--empty { color: var(--text-dim); }
+.image-field-preview img    { width: 100%; max-height: 260px; object-fit: contain; display: block; }
+
+.image-field-actions {
+  display:     flex;
+  gap:         .4rem;
+  flex-wrap:   wrap;
+  margin-bottom: .4rem;
+}
+.image-field-upload-btn { cursor: pointer; }
+.image-field-url-wrap   { margin-top: .2rem; }
+
 /* ─── Icon upload field ───────────────────────────────────────────────────── */
 .icon-upload-wrap {
   display:     flex;

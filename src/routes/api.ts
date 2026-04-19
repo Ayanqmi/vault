@@ -43,25 +43,43 @@ const iconLimiter = rateLimit({
   message: { error: 'Too many icon uploads. Try again later.' },
 });
 
-// ─── Icon upload setup ────────────────────────────────────────────────────────
-const ICONS_DIR       = path.resolve(process.env.DATA_DIR || './data', 'icons');
-const MAX_ICONS       = 30;                           // per user
-const MAX_ENC_BYTES   = 64 * 1024;                   // 64 KB max per encrypted blob
-const ALLOWED_MIMES   = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const imageLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 60,
+  keyGenerator: (req) => String((req.session as any)?.userId ?? req.ip),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many image uploads. Try again later.' },
+});
+
+// ─── Upload setup (icons + images) ───────────────────────────────────────────
+const DATA_BASE      = process.env.DATA_DIR || './data';
+const ICONS_DIR      = path.resolve(DATA_BASE, 'icons');
+const IMAGES_DIR     = path.resolve(DATA_BASE, 'images');
+const MAX_ICONS      = 30;                            // per user
+const MAX_IMAGES     = 100;                           // per user
+const MAX_ENC_BYTES  = 64 * 1024;                    // 64 KB max per encrypted blob
+const ALLOWED_MIMES  = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const MIME_EXT: Record<string, string> = {
   'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp',
 };
 
-fs.mkdirSync(ICONS_DIR, { recursive: true });
+fs.mkdirSync(ICONS_DIR,  { recursive: true });
+fs.mkdirSync(IMAGES_DIR, { recursive: true });
 
-const iconUpload = multer({
-  storage: multer.memoryStorage(),
-  limits:  { fileSize: 2 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (ALLOWED_MIMES.has(file.mimetype)) cb(null, true);
-    else cb(new Error('Only PNG, JPEG, GIF and WebP images are allowed.') as any, false);
-  },
-});
+function makeUpload(maxBytes: number) {
+  return multer({
+    storage: multer.memoryStorage(),
+    limits:  { fileSize: maxBytes },
+    fileFilter: (_req, file, cb) => {
+      if (ALLOWED_MIMES.has(file.mimetype)) cb(null, true);
+      else cb(new Error('Only PNG, JPEG, GIF and WebP images are allowed.') as any, false);
+    },
+  });
+}
+
+const iconUpload  = makeUpload(2 * 1024 * 1024);   // 2 MB for icons
+const imageUpload = makeUpload(10 * 1024 * 1024);  // 10 MB for content images
 
 /** Verify file magic bytes — client-supplied MIME type is untrusted */
 function hasValidMagic(buf: Buffer): boolean {
@@ -78,7 +96,7 @@ function hasValidMagic(buf: Buffer): boolean {
   return false;
 }
 
-const WIDGET_TYPES = ['note', 'reminder', 'bookmark', 'account', 'birthday'] as const;
+const WIDGET_TYPES = ['note', 'reminder', 'bookmark', 'account', 'birthday', 'inspiration'] as const;
 type WidgetType = typeof WIDGET_TYPES[number];
 
 // ─── GET /api/widgets ─────────────────────────────────────────────────────────
@@ -188,48 +206,74 @@ router.get('/vault-info', (req: Request, res: Response) => {
   });
 });
 
+/** Save an uploaded buffer to a per-user subdirectory; returns the public URL */
+function saveUpload(buf: Buffer, mime: string, baseDir: string, urlPrefix: string, userId: number): string {
+  const userDir = path.join(baseDir, String(userId));
+  fs.mkdirSync(userDir, { recursive: true });
+  const ext      = MIME_EXT[mime] || 'png';
+  const filename = `${nanoid(16)}.${ext}`;
+  fs.writeFileSync(path.join(userDir, filename), buf);
+  return `${urlPrefix}/${userId}/${filename}`;
+}
+
+/** Delete a user-owned uploaded file; validates the URL pattern */
+function deleteUpload(url: string, baseDir: string, urlPrefix: string, userId: number): boolean {
+  const escaped = urlPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`^${escaped}/(\\d+)/([a-zA-Z0-9_-]+\\.(png|jpg|gif|webp))$`);
+  const match = (url || '').match(re);
+  if (!match || parseInt(match[1], 10) !== userId) return false;
+  const filepath = path.join(baseDir, String(userId), match[2]);
+  try { if (fs.existsSync(filepath)) fs.unlinkSync(filepath); } catch { /* best-effort */ }
+  return true;
+}
+
 // ─── POST /api/widgets/icon ───────────────────────────────────────────────────
 router.post('/widgets/icon', iconLimiter, iconUpload.single('icon'), (req: Request, res: Response) => {
   const user = res.locals.user;
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+  if (!hasValidMagic(req.file.buffer)) return res.status(400).json({ error: 'Invalid image file.' });
 
-  const buf = req.file.buffer;
-
-  if (!hasValidMagic(buf)) {
-    return res.status(400).json({ error: 'Invalid image file.' });
-  }
-
-  // Per-user directory and count cap
   const userDir = path.join(ICONS_DIR, String(user.id));
   fs.mkdirSync(userDir, { recursive: true });
-
-  const existing = fs.readdirSync(userDir);
-  if (existing.length >= MAX_ICONS) {
+  if (fs.readdirSync(userDir).length >= MAX_ICONS) {
     return res.status(400).json({ error: `Icon limit reached (max ${MAX_ICONS}).` });
   }
 
-  const ext      = MIME_EXT[req.file.mimetype] || 'png';
-  const filename = `${nanoid(16)}.${ext}`;
-  fs.writeFileSync(path.join(userDir, filename), buf);
-
-  res.json({ url: `/icons/${user.id}/${filename}` });
+  res.json({ url: saveUpload(req.file.buffer, req.file.mimetype, ICONS_DIR, '/icons', user.id) });
 });
 
 // ─── DELETE /api/widgets/icon ─────────────────────────────────────────────────
 router.delete('/widgets/icon', (req: Request, res: Response) => {
   const user = res.locals.user;
   const { url } = req.body as { url?: string };
-
-  // Only allow deleting icons owned by this user: /icons/{userId}/{filename}
-  const match = (url || '').match(/^\/icons\/(\d+)\/([a-zA-Z0-9_-]+\.(png|jpg|gif|webp))$/);
-  if (!match || parseInt(match[1], 10) !== user.id) {
+  if (!deleteUpload(url || '', ICONS_DIR, '/icons', user.id)) {
     return res.status(400).json({ error: 'Invalid icon URL.' });
   }
+  res.json({ ok: true });
+});
 
-  const filepath = path.join(ICONS_DIR, String(user.id), match[2]);
-  try {
-    if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
-  } catch { /* best-effort */ }
+// ─── POST /api/widgets/image ──────────────────────────────────────────────────
+router.post('/widgets/image', imageLimiter, imageUpload.single('image'), (req: Request, res: Response) => {
+  const user = res.locals.user;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+  if (!hasValidMagic(req.file.buffer)) return res.status(400).json({ error: 'Invalid image file.' });
+
+  const userDir = path.join(IMAGES_DIR, String(user.id));
+  fs.mkdirSync(userDir, { recursive: true });
+  if (fs.readdirSync(userDir).length >= MAX_IMAGES) {
+    return res.status(400).json({ error: `Image limit reached (max ${MAX_IMAGES}).` });
+  }
+
+  res.json({ url: saveUpload(req.file.buffer, req.file.mimetype, IMAGES_DIR, '/images', user.id) });
+});
+
+// ─── DELETE /api/widgets/image ────────────────────────────────────────────────
+router.delete('/widgets/image', (req: Request, res: Response) => {
+  const user = res.locals.user;
+  const { url } = req.body as { url?: string };
+  if (!deleteUpload(url || '', IMAGES_DIR, '/images', user.id)) {
+    return res.status(400).json({ error: 'Invalid image URL.' });
+  }
   res.json({ ok: true });
 });
 

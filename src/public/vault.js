@@ -168,15 +168,23 @@ function buildWidgetEl(w) {
   const badge = widgetBadgeIcon(w);
 
   const typeMeta = {
-    note:     { label: 'note',     icon: badge || noteIcon() },
-    reminder: { label: 'reminder', icon: reminderIcon() },
-    bookmark: { label: 'bookmark', icon: badge || bookmarkIcon() },
-    account:  { label: 'account',  icon: badge || accountIcon() },
-    birthday: { label: 'birthday', icon: birthdayIcon() },
+    note:        { label: 'note',        icon: badge || noteIcon() },
+    reminder:    { label: 'reminder',    icon: reminderIcon() },
+    bookmark:    { label: 'bookmark',    icon: badge || bookmarkIcon() },
+    account:     { label: 'account',     icon: badge || accountIcon() },
+    birthday:    { label: 'birthday',    icon: birthdayIcon() },
+    inspiration: { label: 'inspiration', icon: inspirationIcon() },
   };
   const meta = typeMeta[w.type] || { label: w.type, icon: '' };
 
+  // Hero image for inspiration widgets (bleeds to card edges above the header)
+  const heroUrl = w.type === 'inspiration' && w.data?.image_url ? w.data.image_url : null;
+  const heroHtml = heroUrl
+    ? `<div class="widget-hero"><img src="${esc(heroUrl)}" alt="" loading="lazy" /></div>`
+    : '';
+
   el.innerHTML = `
+    ${heroHtml}
     <div class="widget-header">
       <div class="widget-drag-handle" title="drag to reorder">
         <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><circle cx="2" cy="2" r="1"/><circle cx="8" cy="2" r="1"/><circle cx="2" cy="5" r="1"/><circle cx="8" cy="5" r="1"/><circle cx="2" cy="8" r="1"/><circle cx="8" cy="8" r="1"/></svg>
@@ -314,7 +322,8 @@ function renderWidgetBody(w) {
 
   switch (w.type) {
     case 'note':
-      return `<div class="widget-note-content">${esc(w.data.content || '')}</div>`;
+      return `<div class="widget-note-content">${esc(w.data.content || '')}</div>
+        ${w.data.image_url ? `<div class="widget-inline-image"><img src="${esc(w.data.image_url)}" alt="" loading="lazy" /></div>` : ''}`;
 
     case 'reminder': {
       const done     = !!w.data.completed;
@@ -384,6 +393,11 @@ function renderWidgetBody(w) {
           ${daysUntil === 0 ? 'today!' : daysUntil + ' days away'}
         </div>` : ''}`;
     }
+
+    case 'inspiration':
+      return w.data.caption
+        ? `<div class="widget-inspiration-caption">${esc(w.data.caption)}</div>`
+        : '';
 
     default:
       return '';
@@ -470,6 +484,7 @@ function buildModalForm(type, existing) {
     case 'note':
       fields.appendChild(makeIconUploadField('icon_url', 'Icon', data.icon_url || ''));
       fields.appendChild(makeTextarea('content', 'Note', data.content || '', 'Write your note…'));
+      fields.appendChild(makeImageField('image_url', 'Image', data.image_url || ''));
       break;
 
     case 'reminder':
@@ -496,6 +511,11 @@ function buildModalForm(type, existing) {
       fields.appendChild(makeField('name_full', 'Full name', 'text', data.name_full || '', '', false, false));
       fields.appendChild(makeField('date', 'Date of birth', 'date', data.date || '', '', false, false));
       fields.appendChild(makeTextarea('notes', 'Notes', data.notes || '', 'Optional…'));
+      break;
+
+    case 'inspiration':
+      fields.appendChild(makeImageField('image_url', 'Image', data.image_url || ''));
+      fields.appendChild(makeTextarea('caption', 'Caption', data.caption || '', 'Optional caption…'));
       break;
   }
 
@@ -553,7 +573,8 @@ function collectPayload(type, fields) {
   const get = name => fields.querySelector(`[name="${name}"]`)?.value.trim() || '';
   const getChecked = name => !!(fields.querySelector(`[name="${name}"]`)?.checked);
   switch (type) {
-    case 'note':     return { icon_url: get('icon_url'), content: get('content') };
+    case 'note':        return { icon_url: get('icon_url'), content: get('content'), image_url: get('image_url') };
+    case 'inspiration': return { image_url: get('image_url'), caption: get('caption') };
     case 'reminder': return { content: get('content'), due_date: get('due_date'), completed: getChecked('completed') };
     case 'bookmark': return { url: get('url'), description: get('description') };
     case 'account':  return { icon_url: get('icon_url'), username: get('username'), email: get('email'), password: get('password'), url: get('url'), notes: get('notes') };
@@ -788,6 +809,110 @@ function makeIconUploadField(name, label, value) {
   return wrap;
 }
 
+function makeImageField(name, label, value) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field';
+
+  const PLACEHOLDER = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+
+  wrap.innerHTML = `
+    <label class="field-label">${esc(label)}</label>
+    <input type="hidden" name="${name}" value="${esc(value)}" />
+    <div class="image-field-preview ${value ? '' : 'image-field-preview--empty'}">
+      ${value ? `<img src="${esc(value)}" alt="" />` : PLACEHOLDER}
+    </div>
+    <div class="image-field-actions">
+      <label class="btn btn--ghost btn--sm image-field-upload-btn">
+        ${value ? 'change image' : 'upload image'}
+        <input type="file" accept="image/*" style="display:none" />
+      </label>
+      ${value ? `<button type="button" class="btn btn--ghost btn--sm image-field-clear">remove</button>` : ''}
+    </div>
+    <div class="image-field-url-wrap">
+      <input class="field-input image-field-url" type="url" placeholder="or paste image URL…" />
+    </div>
+    <div class="image-field-err" style="display:none;font-size:.75rem;color:var(--danger);margin-top:.25rem"></div>`;
+
+  const hidden    = wrap.querySelector(`input[name="${name}"]`);
+  const preview   = wrap.querySelector('.image-field-preview');
+  const actions   = wrap.querySelector('.image-field-actions');
+  const fileInput = wrap.querySelector('input[type="file"]');
+  const urlInput  = wrap.querySelector('.image-field-url');
+  const errEl     = wrap.querySelector('.image-field-err');
+
+  function setImage(url) {
+    hidden.value = url;
+    preview.classList.remove('image-field-preview--empty');
+    preview.innerHTML = `<img src="${esc(url)}" alt="" />`;
+    const lbl = actions.querySelector('.image-field-upload-btn');
+    lbl.childNodes[0].textContent = 'change image ';
+    let clearBtn = actions.querySelector('.image-field-clear');
+    if (!clearBtn) {
+      clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'btn btn--ghost btn--sm image-field-clear';
+      clearBtn.textContent = 'remove';
+      lbl.after(clearBtn);
+      clearBtn.addEventListener('click', clearImage);
+    }
+  }
+
+  function clearImage() {
+    const prev = hidden.value;
+    hidden.value  = '';
+    urlInput.value = '';
+    preview.classList.add('image-field-preview--empty');
+    preview.innerHTML = PLACEHOLDER;
+    const clearBtn = actions.querySelector('.image-field-clear');
+    if (clearBtn) clearBtn.remove();
+    actions.querySelector('.image-field-upload-btn').childNodes[0].textContent = 'upload image ';
+    if (prev && prev.startsWith('/images/')) {
+      fetch('/api/widgets/image', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() },
+        body: JSON.stringify({ url: prev }),
+      }).catch(() => {});
+    }
+  }
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    errEl.style.display = 'none';
+    const fd = new FormData();
+    fd.append('image', file);
+    try {
+      const res  = await fetch('/api/widgets/image', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrf() },
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Upload failed.');
+      setImage(json.url);
+      urlInput.value = '';
+    } catch (e) {
+      errEl.textContent   = e.message;
+      errEl.style.display = 'block';
+    }
+    fileInput.value = '';
+  });
+
+  urlInput.addEventListener('change', () => {
+    const url = urlInput.value.trim();
+    if (!url) return;
+    errEl.style.display = 'none';
+    try { new URL(url); } catch { return; }
+    setImage(url);
+    urlInput.value = '';
+  });
+
+  const existingClear = wrap.querySelector('.image-field-clear');
+  if (existingClear) existingClear.addEventListener('click', clearImage);
+
+  return wrap;
+}
+
 function makeTagsField(tagsStr) {
   let existing = [];
   try { existing = JSON.parse(tagsStr || '[]'); } catch {}
@@ -905,4 +1030,7 @@ function accountIcon() {
 }
 function birthdayIcon() {
   return `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+}
+function inspirationIcon() {
+  return `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
 }

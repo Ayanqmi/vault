@@ -27,14 +27,13 @@ app.set('views', path.join(__dirname, 'views'));
 
 // ─── Static files ─────────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
-// Serve user-uploaded widget icons (organised by user ID)
-const ICONS_DIR = path.resolve(process.env.DATA_DIR || './data', 'icons');
-app.use('/icons', express.static(ICONS_DIR, {
-  // Prevent content-type sniffing for served files
-  setHeaders: (res) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-  },
-}));
+const STATIC_OPTS = {
+  setHeaders: (res: Response) => { res.setHeader('X-Content-Type-Options', 'nosniff'); },
+};
+const DATA_BASE  = process.env.DATA_DIR || './data';
+// Serve user-uploaded widget icons and content images
+app.use('/icons',  express.static(path.resolve(DATA_BASE, 'icons'),  STATIC_OPTS));
+app.use('/images', express.static(path.resolve(DATA_BASE, 'images'), STATIC_OPTS));
 
 // ─── Body parsers ─────────────────────────────────────────────────────────────
 app.use(express.json());
